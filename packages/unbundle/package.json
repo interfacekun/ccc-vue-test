@@ -1,0 +1,15 @@
+{
+  "name": "unbundle",
+  "version": "0.0.1",
+  "description": "native不合并脚本",
+  "author": "Cocos Creator",
+  "main": "main.js",
+  "main-menu": {
+    "Packages/unbundle/jsb-link": {
+      "message": "unbundle:unbundle-scripts-link"
+    },
+    "Packages/unbundle/jsb-default": {
+      "message": "unbundle:unbundle-scripts-default"
+    }
+  }
+}
