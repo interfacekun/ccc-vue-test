@@ -138,7 +138,7 @@ window.boot = function () {
         });
     }
     
-    jsList = jsList.concat(plugins)
+    jsList = jsList.concat(settings.plugins ? settings.plugins : []);
 
     window.__modular.init(settings.scripts);
     jsList = jsList.concat(window.__modular.srcs.map(function(s) {

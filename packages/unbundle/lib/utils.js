@@ -2,7 +2,8 @@ var fpath = require("path");
 var ffs = require("fire-fs");
 var process = require('child_process');
 var workDir = require('./walk-dir')
-
+var xxtea = require("xxtea-node")
+var zlib = require("zlib")
 
 
 var utils = {};
@@ -65,8 +66,8 @@ utils.copyDir = (src, dist, filters, callback) => {
                     callback(err)
                 } else {
                     paths.forEach(function (path) {
-                        var _src = src + '/' + path;
-                        var _dist = dist + '/' + path;
+                        var _src = fpath.join(src, path);
+                        var _dist =  fpath.join(dist, path);
                         ffs.stat(_src, function (err, stat) {
                             if (err) {
                                 nowFiles = 0;
@@ -79,6 +80,7 @@ utils.copyDir = (src, dist, filters, callback) => {
                                     
                                     if (filters.indexOf(extname) == -1) {
                                         utils.copyFile(_src, _dist);
+                                        if (ffs.existsSync(`${_dist}c`)) ffs.unlinkSync(`${_dist}c`);
                                     } else {
                                         Editor.log("filter", _src, extname);
                                     }
@@ -86,7 +88,7 @@ utils.copyDir = (src, dist, filters, callback) => {
                                     // ffs.writeFileSync(_dist, ffs.readFileSync(_src));
                                     nowFiles += 1;
                                     if (nowFiles === totalFiles) {
-                                        Editor.log(`${nowFiles}/${totalFiles}`, typeof(callback));
+                                        Editor.log(`${nowFiles}/${totalFiles}`);
                                         nowFiles = 0;
                                         totalFiles = 0;
                                         callback(null, nowFiles, totalFiles);
@@ -135,4 +137,102 @@ utils.copyDirPromise = (src, dist, filters) => {
     })
 }
 
+utils.encryptJsFilesPromise = (dir, xxetaKey, zipCompressJs) => {
+    return new Promise((resolve) => {
+        if (!ffs.existsSync(dir)) {
+            resolve({error: null});
+            return;
+        };
+        Editor.log(`encryptJs strart!`);
+        utils.encryptJsFiles(dir, xxetaKey, zipCompressJs, (error, nowFiles, totalFiles) => {
+           if (error) {
+                Editor.log(`encryptJs error!`, error);
+                resolve({error})
+            } else {
+                Editor.log(`encryptJs done!`);
+                resolve({error, nowFiles, totalFiles});
+            }
+        });
+    })
+}
+
+utils.encryptJsFiles = (dir, xxetaKey, zipCompressJs, callback) => {
+
+    if (!totalFiles || totalFiles === 0) {
+        nowFiles = 0;
+        totalFiles = workDir.getTotalFiles(dir);
+        Editor.warn(`encryptJsFiles ${dir}`);
+        Editor.warn(`total files ${totalFiles}`);
+    }
+
+    function _encryptJsDir(dir) {
+        ffs.readdir(dir, function (err, paths) {
+            if (err) {
+                nowFiles = 0;
+                totalFiles = 0;
+                callback(err)
+            } else {
+                paths.forEach(function (path) {
+                    var _src = fpath.join(dir, path);
+                    var _dist =  fpath.join(dir, path.replace(".js", ".jsc"));
+                    ffs.stat(_src, function (err, stat) {
+                        if (err) {
+                            nowFiles = 0;
+                            totalFiles = 0;
+                            callback(err);
+                        } else {
+                            // 判断是文件还是目录
+                            if (stat.isFile()) {
+                                let extname = fpath.extname(_src);
+                                
+                                if (extname === ".js" && path.indexOf("modular") == -1) {
+                                    utils.encryptJsFile(_src, _dist, xxetaKey, zipCompressJs);
+                                } else {
+                                    Editor.log("filter", _src, extname);
+                                }
+
+                                nowFiles += 1;
+                                if (nowFiles === totalFiles) {
+                                    Editor.log(`${nowFiles}/${totalFiles}`);
+                                    nowFiles = 0;
+                                    totalFiles = 0;
+                                    callback(null, nowFiles, totalFiles);
+                                }
+                            } else if (stat.isDirectory()) {
+                                // 当是目录是，递归复制
+                                utils.encryptJsFiles(_src, xxetaKey, zipCompressJs, callback)
+                            }
+                        }
+                    })
+                })
+            }
+        })
+    }
+
+    _encryptJsDir(dir);
+}
+
+utils.encryptJsFile = (src, dist, xxetaKey, zipCompressJs) => {
+    let content = ffs.readFileSync(src);
+    if (zipCompressJs) {
+        content = zlib.gzipSync(content);
+    }
+
+    content = xxtea.encrypt(content, xxtea.toBytes(xxetaKey));
+    ffs.writeFileSync(dist, content);
+    ffs.unlinkSync(src);
+}
+
+utils.decryptJsFile = (src, dist, xxetaKey, zipCompressJs) => {
+    let content = ffs.readFileSync(src);
+
+    content = xxtea.decrypt(content, xxtea.toBytes(xxetaKey));
+    content = new Buffer(content);
+    if (zipCompressJs) {
+        content = zlib.gunzipSync(content);
+    }
+    ffs.writeFileSync(dist, content);
+}
+
 module.exports = utils
+

@@ -9,7 +9,7 @@
   },
   "appKey": "",
   "appSecret": "",
-  "encryptJs": false,
+  "encryptJs": true,
   "excludeScenes": [],
   "fb-instant-games": {},
   "includeAnySDK": false,
